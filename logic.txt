@@ -1,0 +1,80 @@
+So do u see both files in the main folder what i want u to do is to simply take the matchpro.txt
+U will find the actuall request and response fomat u except in that file 
+But the catch is that there is a speciall detail there which is inside data matches and it does:
+take each external_id from the entire list and concatenate them with a single event id which is 24 in this format
+{
+    "event_id": 24,
+    "uids": [
+        12456605,
+        1244386,
+        12488330,
+        12413660,
+        12444223,
+        12449599,
+        12496083,
+        12491525,
+        12469428,
+        12416681,
+        12417871,
+        12429643,
+        1243452,
+        12485855,
+        1242822,
+        12450033,
+        12425635,
+        12416533,
+        12488988,
+        12466816,
+        12429549,
+        12416386,
+        12421266,
+        1243822,
+        12486281,
+        12478262,
+        12464333,
+        12426426,
+        124100405,
+        12429564,
+        12426674,
+        1249276,
+        12424576,
+        12496308,
+        12499136,
+        12414275,
+        12460728,
+        12499520,
+        12420072,
+        12462464,
+        12426295,
+        12418925,
+        12424846,
+        12415737,
+        1246572,
+        1248169,
+        12428222,
+        12462063,
+        12462828,
+        12452905
+    ]
+} 
+and send themas request to the actuall gitexafrice.txt full description there what i want is that 
+u do the same thing for all the external_ids in the matchpro.txt and after u done with the list items
+u use the actuall     "meta": {
+        "total_matches": 55,
+        "filtered_matches": 0,
+        "returned_matches": 50,
+        "page": 1,
+        "page_size": 50,
+        "total_pages": 2,
+        "has_next": true,
+        "has_previous": false,
+        "next_url": "/api/v1/matchmaking/matches/?external_id=12464011&page_size=50&page=2",
+        "prev_url": null,
+        "generated_at": "2026-04-11T21:56:31.573675+00:00",
+        "response_time_ms": 163,
+        "api_version": "v1",
+        "event_id": 5,
+        "include_breakdown": false
+    } 
+    inside the actual matchpro.txt to check if there is a next page if yes then u will continue to send the request with the next url until there is no next page and then u will stop the process.
+    the information will be extracted from the gitexafrica.txt that will give u the list of attendes information that u should append to the actuall matched_contact.csv that way u can have more contact infromation
