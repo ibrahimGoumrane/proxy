@@ -276,16 +276,6 @@ def run_api_pipeline(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-	parser = argparse.ArgumentParser(
-		description="Export matched contacts from live MatchPro and GitexAfrica APIs."
-	)
-	parser.add_argument(
-		"--resume",
-		action="store_true",
-		help="Resume from saved page_state.json if available",
-	)
-
-	args = parser.parse_args()
 	matchpro_token = os.getenv("MATCHPRO_TOKEN", "")
 	gitexafrica_token = os.getenv("GITEXAFRICA_TOKEN", "")
 	page_size = int(os.getenv("MATCHPRO_PAGE_SIZE", "200"))
@@ -301,7 +291,7 @@ def main() -> None:
 		raise ValueError("Missing required env values: MATCHPRO_TOKEN and GITEXAFRICA_TOKEN.")
 
 	config = argparse.Namespace(
-		resume=args.resume,
+		resume=True,
 		output=OUTPUT_CSV,
 		matchpro_token=matchpro_token,
 		gitexafrica_token=gitexafrica_token,
@@ -318,19 +308,6 @@ def main() -> None:
 		max_parallel_requests=max_parallel_requests,
 		target_contacts=target_contacts,
 	)
-
-	if not args.resume:
-		# Fresh run starts from the fixed seed and clears stale checkpoint.
-		save_id_list(config.processed_ids_file, [FIXED_EXTERNAL_ID])
-		save_id_list(config.already_checked_ids_file, [])
-		save_page_state(
-			config.page_state_file,
-			0,
-			None,
-			False,
-			{"fresh_run": True},
-			current_seed_external_id=None,
-		)
 
 	run_api_pipeline(config)
 
