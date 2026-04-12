@@ -1,5 +1,6 @@
 import argparse
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -34,6 +35,48 @@ FIXED_EXTERNAL_ID = "12464011"
 DEFAULT_TIMEOUT = 45
 
 
+def fetch_attendees_parallel(
+	gitex_base_url: str,
+	bearer_token: str,
+	event_id: int,
+	uids: list[str],
+	timeout: int,
+	max_parallel_requests: int,
+) -> list[dict]:
+	if not uids:
+		return []
+	worker_count = max(1, min(max_parallel_requests, len(uids)))
+	if worker_count == 1:
+		return fetch_attendees_by_uids(
+			gitex_base_url=gitex_base_url,
+			bearer_token=bearer_token,
+			event_id=event_id,
+			uids=uids,
+			timeout=timeout,
+		)
+
+	chunk_size = max(1, (len(uids) + worker_count - 1) // worker_count)
+	uid_chunks = [uids[i : i + chunk_size] for i in range(0, len(uids), chunk_size)]
+
+	attendees: list[dict] = []
+	with ThreadPoolExecutor(max_workers=worker_count) as executor:
+		futures = [
+			executor.submit(
+				fetch_attendees_by_uids,
+				gitex_base_url=gitex_base_url,
+				bearer_token=bearer_token,
+				event_id=event_id,
+				uids=chunk,
+				timeout=timeout,
+			)
+			for chunk in uid_chunks
+		]
+		for future in as_completed(futures):
+			attendees.extend(future.result())
+
+	return attendees
+
+
 def run_api_pipeline(args: argparse.Namespace) -> None:
 	logger = setup_logger(args.log_dir)
 	pending_ids = load_id_list(args.processed_ids_file)
@@ -56,6 +99,10 @@ def run_api_pipeline(args: argparse.Namespace) -> None:
 		current_url = normalize_next_url(args.matchpro_base_url, page_state.get("next_url"), args.page_size)
 		logger.info("resume_mode=true seed=%s next_url=%s", current_seed_id, current_url)
 
+	if args.target_contacts:
+		logger.info("target_contacts=%s", args.target_contacts)
+	logger.info("parallel_requests=%s", args.max_parallel_requests)
+
 	headers = {
 		"accept": "application/json, text/plain, */*",
 		"authorization": f"Token {args.matchpro_token}",
@@ -74,6 +121,10 @@ def run_api_pipeline(args: argparse.Namespace) -> None:
 	}
 
 	while True:
+		if args.target_contacts and counters["rows_written"] >= args.target_contacts:
+			logger.info("target_reached=%s total_written=%s", args.target_contacts, counters["rows_written"])
+			break
+
 		if not current_url:
 			while pending_ids and pending_ids[-1] in checked_set:
 				skipped = pending_ids.pop()
@@ -128,12 +179,13 @@ def run_api_pipeline(args: argparse.Namespace) -> None:
 		already_known_count = len(external_ids) - len(new_discovered_ids)
 		save_id_list(args.processed_ids_file, pending_ids)
 
-		attendees = fetch_attendees_by_uids(
+		attendees = fetch_attendees_parallel(
 			gitex_base_url=args.gitex_base_url,
 			bearer_token=args.gitexafrica_token,
 			event_id=args.gitex_event_id,
 			uids=new_discovered_ids,
 			timeout=args.timeout,
+			max_parallel_requests=args.max_parallel_requests,
 		)
 		attendee_index = build_attendee_index(attendees)
 
@@ -165,7 +217,18 @@ def run_api_pipeline(args: argparse.Namespace) -> None:
 			next_url=next_url,
 			has_next=has_next,
 			counters=counters,
+			current_seed_external_id=current_seed_id,
 		)
+
+		if args.target_contacts and counters["rows_written"] >= args.target_contacts:
+			logger.info(
+				"target_reached=%s after_seed=%s page=%s total_written=%s",
+				args.target_contacts,
+				current_seed_id,
+				page,
+				counters["rows_written"],
+			)
+			break
 
 		logger.info(
 			"seed=%s page=%s fetched=%s known=%s discovered=%s posted=%s attendees=%s written=%s pending_total=%s checked_total=%s total_written=%s",
@@ -226,6 +289,13 @@ def main() -> None:
 	matchpro_token = os.getenv("MATCHPRO_TOKEN", "")
 	gitexafrica_token = os.getenv("GITEXAFRICA_TOKEN", "")
 	page_size = int(os.getenv("MATCHPRO_PAGE_SIZE", "200"))
+	max_parallel_requests = int(os.getenv("MAX_PARALLEL_REQUESTS", "1"))
+	target_contacts_raw = os.getenv("TARGET_CONTACTS", "").strip()
+	target_contacts = int(target_contacts_raw) if target_contacts_raw else None
+	if max_parallel_requests < 1:
+		raise ValueError("MAX_PARALLEL_REQUESTS must be >= 1")
+	if target_contacts is not None and target_contacts < 1:
+		raise ValueError("TARGET_CONTACTS must be >= 1 when provided")
 
 	if not (matchpro_token and gitexafrica_token):
 		raise ValueError("Missing required env values: MATCHPRO_TOKEN and GITEXAFRICA_TOKEN.")
@@ -245,13 +315,22 @@ def main() -> None:
 		page_state_file=TMP_DIR / "page_state.json",
 		log_dir=TMP_DIR / "logs",
 		timeout=DEFAULT_TIMEOUT,
+		max_parallel_requests=max_parallel_requests,
+		target_contacts=target_contacts,
 	)
 
 	if not args.resume:
 		# Fresh run starts from the fixed seed and clears stale checkpoint.
 		save_id_list(config.processed_ids_file, [FIXED_EXTERNAL_ID])
 		save_id_list(config.already_checked_ids_file, [])
-		save_page_state(config.page_state_file, 0, None, False, {"fresh_run": True})
+		save_page_state(
+			config.page_state_file,
+			0,
+			None,
+			False,
+			{"fresh_run": True},
+			current_seed_external_id=None,
+		)
 
 	run_api_pipeline(config)
 

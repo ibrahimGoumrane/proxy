@@ -1,4 +1,5 @@
 import logging
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -16,5 +17,9 @@ def setup_logger(log_dir: Path) -> logging.Logger:
 	handler = logging.FileHandler(log_file, encoding="utf-8")
 	handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
 	logger.addHandler(handler)
+
+	console_handler = logging.StreamHandler(sys.stdout)
+	console_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
+	logger.addHandler(console_handler)
 
 	return logger

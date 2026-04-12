@@ -62,11 +62,13 @@ def save_page_state(
 	next_url: str | None,
 	has_next: bool,
 	counters: dict,
+	current_seed_external_id: str | None = None,
 ) -> None:
 	state = {
 		"page": page,
 		"next_url": next_url,
 		"has_next": has_next,
+		"current_seed_external_id": current_seed_external_id,
 		"updated_at": datetime.now(timezone.utc).isoformat(),
 		"counters": counters,
 	}

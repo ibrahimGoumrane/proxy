@@ -7,17 +7,30 @@ import requests
 
 
 OUTPUT_FIELDS = [
-	"name",
+	"email Primaire",
 	"fname",
 	"lname",
-	"email",
-	"phone",
+	"url",
 	"position",
+	"phone",
+	"mobile",
+	"fax",
 	"address",
 	"city",
+	"zip",
 	"country",
+	"urlcontactform",
 	"linkedin",
-	"activity",
+	"image",
+	"mx",
+	"emailgeneric",
+	"usergeneric",
+	"syntaxeemail",
+	"sourcefile",
+	"fullname",
+	"name",
+	"CA",
+	"activite",
 ]
 
 
@@ -89,7 +102,15 @@ def split_name(full_name: str) -> tuple[str, str]:
 	parts = clean_name.split()
 	if len(parts) == 1:
 		return parts[0], ""
-	return parts[0], " ".join(parts[1:])
+	return " ".join(parts[:-1]), parts[-1]
+
+
+def capitalize_words(value: str) -> str:
+	return " ".join(part.capitalize() for part in str(value).split())
+
+
+def uppercase_words(value: str) -> str:
+	return " ".join(part.upper() for part in str(value).split())
 
 
 def build_phone(country_code: str, mobile: str) -> str:
@@ -104,21 +125,51 @@ def build_output_row(attendee: dict, match: dict) -> dict:
 	match_data = flatten_match_row(match)
 	name = safe_get(attendee, "firstname", "")
 	fname, lname = split_name(name)
+	fname = capitalize_words(fname)
+	lname = uppercase_words(lname)
+	full_name = " ".join(part for part in [fname, lname] if part).strip()
+	email = safe_get(attendee, "email", "")
 	country = safe_get(attendee, "country_of_residence", "") or safe_get(attendee, "country", "")
 	activity = match_data["match_attr_interested_solutions"] or match_data["match_reasons"] or match_data["match_label"]
+	email_lower = str(email).strip().lower()
+	email_domain = email_lower.split("@", 1)[1] if "@" in email_lower else ""
+	generic_domains = {
+		"gmail.com",
+		"yahoo.com",
+		"outlook.com",
+		"hotmail.com",
+		"icloud.com",
+		"aol.com",
+		"proton.me",
+		"protonmail.com",
+	}
+	is_generic = bool(email_domain and email_domain in generic_domains)
 
 	return {
-		"name": name,
+		"email Primaire": email,
 		"fname": fname,
 		"lname": lname,
-		"email": safe_get(attendee, "email", ""),
-		"phone": build_phone(safe_get(attendee, "country_code", ""), safe_get(attendee, "mobile", "")),
+		"url": "",
 		"position": safe_get(attendee, "designation", ""),
+		"phone": build_phone(safe_get(attendee, "country_code", ""), safe_get(attendee, "mobile", "")),
+		"mobile": safe_get(attendee, "mobile", ""),
+		"fax": "",
 		"address": safe_get(attendee, "address", ""),
 		"city": safe_get(attendee, "city", ""),
+		"zip": safe_get(attendee, "zip", ""),
 		"country": country,
+		"urlcontactform": "",
 		"linkedin": safe_get(attendee, "linkedin", ""),
-		"activity": activity,
+		"image": safe_get(attendee, "register_user_photo", ""),
+		"mx": "",
+		"emailgeneric": email if is_generic else "",
+		"usergeneric": "yes" if is_generic else "",
+		"syntaxeemail": "valid" if email_domain else "",
+		"sourcefile": "gitexafrica_attendees_by_uids",
+		"fullname": full_name,
+		"name": full_name,
+		"CA": safe_get(attendee, "company_name", ""),
+		"activite": safe_get(attendee, "industry", "") or activity,
 	}
 
 

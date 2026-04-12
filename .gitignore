@@ -3,3 +3,4 @@ env
 mitmproxy
 __pycache__
 *.pyc
+backup
