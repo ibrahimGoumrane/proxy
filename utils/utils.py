@@ -4,6 +4,8 @@ from typing import Optional
 from urllib.parse import urlencode, urljoin, urlparse, parse_qsl, urlunparse
 
 import requests
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 OUTPUT_FIELDS = [
@@ -52,6 +54,7 @@ def json_request(
 		headers=headers,
 		json=payload,
 		timeout=timeout,
+		verify=False
 	)
 	response.raise_for_status()
 	return response.json()

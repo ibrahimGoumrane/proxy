@@ -42,25 +42,30 @@ def fetch_attendees_parallel(
 	uids: list[str],
 	timeout: int,
 	max_parallel_requests: int,
+	logger,
 ) -> list[dict]:
 	if not uids:
 		return []
 	worker_count = max(1, min(max_parallel_requests, len(uids)))
 	if worker_count == 1:
-		return fetch_attendees_by_uids(
-			gitex_base_url=gitex_base_url,
-			bearer_token=bearer_token,
-			event_id=event_id,
-			uids=uids,
-			timeout=timeout,
-		)
+		try:
+			return fetch_attendees_by_uids(
+				gitex_base_url=gitex_base_url,
+				bearer_token=bearer_token,
+				event_id=event_id,
+				uids=uids,
+				timeout=timeout,
+			)
+		except Exception as exc:
+			logger.warning("attendee_fetch_failed count=%s error=%s", len(uids), exc)
+			return []
 
 	chunk_size = max(1, (len(uids) + worker_count - 1) // worker_count)
 	uid_chunks = [uids[i : i + chunk_size] for i in range(0, len(uids), chunk_size)]
 
 	attendees: list[dict] = []
 	with ThreadPoolExecutor(max_workers=worker_count) as executor:
-		futures = [
+		future_to_chunk = {
 			executor.submit(
 				fetch_attendees_by_uids,
 				gitex_base_url=gitex_base_url,
@@ -68,11 +73,15 @@ def fetch_attendees_parallel(
 				event_id=event_id,
 				uids=chunk,
 				timeout=timeout,
-			)
+			): chunk
 			for chunk in uid_chunks
-		]
-		for future in as_completed(futures):
-			attendees.extend(future.result())
+		}
+		for future in as_completed(future_to_chunk):
+			chunk = future_to_chunk[future]
+			try:
+				attendees.extend(future.result())
+			except Exception as exc:
+				logger.warning("attendee_chunk_failed chunk_size=%s error=%s", len(chunk), exc)
 
 	return attendees
 
@@ -186,6 +195,7 @@ def run_api_pipeline(args: argparse.Namespace) -> None:
 			uids=new_discovered_ids,
 			timeout=args.timeout,
 			max_parallel_requests=args.max_parallel_requests,
+			logger=logger,
 		)
 		attendee_index = build_attendee_index(attendees)
 
